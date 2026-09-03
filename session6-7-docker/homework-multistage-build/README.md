@@ -78,7 +78,7 @@ The Java image is itself a multi-stage build. The JDK stage compiles `App.java`,
 ### Commands
 
 ```bash
-cd devops-heros/session6-7-docker/homework
+cd devops-heros/session6-7-docker/homework-multistage-build
 
 docker build -t node-hello   ./node-app
 docker build -t python-hello ./python-app
