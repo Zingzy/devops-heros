@@ -11,6 +11,10 @@
 - [Docker multi-stage build](session6-7-docker/homework-multistage-build/README.md)
 - [Docker hello world apps](session6-7-docker/homework-hello-world-apps/README.md)
 - [Docker networking and volumes](session8-docker-networking-volume/homework-networking-volume/README.md)
+- [Kubernetes fundamentals](session9-k8s/homework-k8s-fundamentals/README.md)
+- [Kubernetes pods, ReplicaSets and Deployments](session10-k8s-core-objects/homework-pods-replicasets-deployments/README.md)
+- [Kubernetes networking and Services](session-11-kubernetes-services/homework-networking-services/README.md)
+- [Kubernetes Ingress, ConfigMaps and Secrets](session-12-ingress-configmaps-secrets/homework-ingress-configmaps-secrets/README.md)
 
 ## Submission link
 - Section A: https://forms.gle/ydjAJcwxjpjBXgxB8
