@@ -1,0 +1,206 @@
+name: Session 16 CI/CD demo
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "session-16-github-actions/homework-cicd-demo/**"
+      - "!session-16-github-actions/homework-cicd-demo/README.md"
+      - "!session-16-github-actions/homework-cicd-demo/screenshots/**"
+      - ".github/workflows/session16-cicd-demo.yml"
+  pull_request:
+    paths:
+      - "session-16-github-actions/homework-cicd-demo/**"
+      - "!session-16-github-actions/homework-cicd-demo/README.md"
+      - "!session-16-github-actions/homework-cicd-demo/screenshots/**"
+      - ".github/workflows/session16-cicd-demo.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: session16-cicd-demo-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  APP_DIR: session-16-github-actions/homework-cicd-demo
+  IMAGE: ghcr.io/zingzy/session16-calculator
+
+defaults:
+  run:
+    working-directory: session-16-github-actions/homework-cicd-demo
+
+jobs:
+  lint:
+    name: Lint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.14"
+      - name: Install ruff
+        run: pip install -r requirements.txt
+      - name: Run ruff
+        run: ruff check --output-format=github .
+
+  test:
+    name: Test (Python ${{ matrix.python-version }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.12", "3.13", "3.14"]
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: ${{ matrix.python-version }}
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+      - name: Run pytest
+        run: pytest -v --junitxml=reports/junit-py${{ matrix.python-version }}.xml
+      - name: Upload test report
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: test-report-py${{ matrix.python-version }}
+          path: ${{ env.APP_DIR }}/reports/
+          retention-days: 7
+
+  test-report:
+    name: Test report
+    needs: test
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download all test reports
+        uses: actions/download-artifact@v8
+        with:
+          pattern: test-report-*
+          path: reports
+          merge-multiple: true
+      - name: Summarise reports
+        working-directory: reports
+        run: |
+          ls -l
+          {
+            echo "### Test results"
+            echo ""
+            echo "| Report | Tests | Failures | Errors | Time (s) |"
+            echo "|---|---|---|---|---|"
+            for f in *.xml; do
+              python3 - "$f" <<'EOF'
+          import sys, xml.etree.ElementTree as ET
+          s = ET.parse(sys.argv[1]).getroot().find("testsuite")
+          print(f"| {sys.argv[1]} | {s.get('tests')} | {s.get('failures')} | {s.get('errors')} | {s.get('time')} |")
+          EOF
+            done
+          } | tee -a "$GITHUB_STEP_SUMMARY"
+
+  build:
+    name: Build image
+    needs: [lint, test]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - name: Build the image
+        run: |
+          docker build --build-arg APP_VERSION=${{ github.sha }} \
+            --label org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }} \
+            -t $IMAGE:${{ github.sha }} .
+          docker image ls $IMAGE
+      - name: Smoke test the container
+        run: |
+          docker run -d --name hw16-smoke $IMAGE:${{ github.sha }}
+          for i in $(seq 1 20); do
+            status=$(docker inspect -f '{{.State.Health.Status}}' hw16-smoke)
+            echo "health: $status"
+            [ "$status" = healthy ] && break
+            sleep 2
+          done
+          docker exec -i hw16-smoke python - http://127.0.0.1:8000 ${{ github.sha }} < scripts/smoke_test.py
+      - name: Remove smoke container
+        if: always()
+        run: docker rm -f hw16-smoke || true
+      - name: Save image as a tarball
+        run: docker save $IMAGE:${{ github.sha }} -o image.tar
+      - name: Upload image artifact
+        uses: actions/upload-artifact@v7
+        with:
+          name: image
+          path: ${{ env.APP_DIR }}/image.tar
+          retention-days: 1
+
+  publish:
+    name: Push image to GHCR
+    needs: build
+    if: github.event_name != 'pull_request'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - name: Download image artifact
+        uses: actions/download-artifact@v8
+        with:
+          name: image
+          path: ${{ env.APP_DIR }}
+      - name: Load image
+        run: docker load -i image.tar
+      - name: Show that secrets are masked in logs
+        env:
+          TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          echo "GITHUB_TOKEN is ${#TOKEN} characters long"
+          echo "Printing it directly gives: $TOKEN"
+          DEMO_VALUE="hw16-$(date +%s)-demo"
+          echo "::add-mask::$DEMO_VALUE"
+          echo "Masked value: $DEMO_VALUE"
+          echo "Same value base64 encoded: $(printf %s "$DEMO_VALUE" | base64)"
+      - name: Log in to GHCR
+        env:
+          TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: echo "$TOKEN" | docker login ghcr.io -u ${{ github.actor }} --password-stdin
+      - name: Push image
+        run: |
+          docker tag $IMAGE:${{ github.sha }} $IMAGE:latest
+          docker push $IMAGE:${{ github.sha }}
+          docker push $IMAGE:latest
+
+  deploy:
+    name: Deploy to kind
+    needs: publish
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: read
+    steps:
+      - uses: actions/checkout@v7
+      - name: Create kind cluster
+        uses: helm/kind-action@v1.15.1
+        with:
+          cluster_name: hw16
+      - name: Create image pull secret from GITHUB_TOKEN
+        env:
+          TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          kubectl create secret docker-registry ghcr-pull \
+            --docker-server=ghcr.io \
+            --docker-username=${{ github.actor }} \
+            --docker-password="$TOKEN"
+      - name: Apply manifests
+        run: |
+          sed "s|image: IMAGE|image: $IMAGE:${{ github.sha }}|" k8s/calculator.yaml | kubectl apply -f -
+          kubectl rollout status deployment/calculator --timeout=120s
+          kubectl get deploy,pods,svc -o wide
+      - name: Smoke test through the Service
+        run: |
+          kubectl port-forward svc/calculator 18160:80 > /tmp/port-forward.log 2>&1 &
+          sleep 3
+          python3 scripts/smoke_test.py http://127.0.0.1:18160 ${{ github.sha }}
+      - name: Show which image the pods run
+        run: |
+          kubectl get pods -l app=calculator \
+            -o jsonpath='{range .items[*]}{.metadata.name}{"  "}{.status.containerStatuses[0].imageID}{"\n"}{end}'

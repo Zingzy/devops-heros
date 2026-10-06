@@ -1,0 +1,47 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: calculator
+  labels:
+    app: calculator
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: calculator
+  template:
+    metadata:
+      labels:
+        app: calculator
+    spec:
+      imagePullSecrets:
+        - name: ghcr-pull
+      containers:
+        - name: calculator
+          # The pipeline replaces IMAGE with ghcr.io/zingzy/session16-calculator:<commit sha>
+          image: IMAGE
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 8000
+          readinessProbe:
+            httpGet:
+              path: /healthz
+              port: 8000
+            periodSeconds: 3
+          resources:
+            requests:
+              cpu: 25m
+              memory: 32Mi
+            limits:
+              memory: 64Mi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: calculator
+spec:
+  selector:
+    app: calculator
+  ports:
+    - port: 80
+      targetPort: 8000
