@@ -1,0 +1,135 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 960 680" width="960" height="680" font-family="-apple-system, Segoe UI, Helvetica, Arial, sans-serif" font-size="13">
+  <title>Session 19 architecture: VPC, subnet, security group, EC2 and S3 created by Terraform</title>
+  <style>
+    .bg { fill: #ffffff; }
+    .t { fill: #0f172a; }
+    .m { fill: #64748b; }
+    .line { stroke: #475569; fill: none; stroke-width: 1.5; }
+    .dep { stroke: #7c3aed; fill: none; stroke-width: 1.5; stroke-dasharray: 5 4; }
+    .deptext { fill: #7c3aed; }
+    .head { fill: #475569; }
+    .dephead { fill: #7c3aed; }
+    .box { fill: #ffffff; stroke: #475569; stroke-width: 1.2; }
+    .tool { fill: #f1f5f9; stroke: #94a3b8; stroke-width: 1.2; }
+    .region { fill: #f8fafc; stroke: #94a3b8; stroke-width: 1.2; }
+    .vpc { fill: #eff6ff; stroke: #2563eb; stroke-width: 1.5; }
+    .az { fill: none; stroke: #64748b; stroke-width: 1; stroke-dasharray: 4 4; }
+    .subnet { fill: #ecfdf5; stroke: #059669; stroke-width: 1.5; }
+    .sg { fill: none; stroke: #dc2626; stroke-width: 1.5; stroke-dasharray: 6 4; }
+    .sgtext { fill: #b91c1c; }
+    .s3 { fill: #fff7ed; stroke: #ea580c; stroke-width: 1.5; }
+    .net { fill: #ffffff; stroke: #475569; stroke-width: 1.2; }
+    @media (prefers-color-scheme: dark) {
+      .bg { fill: #0d1117; }
+      .t { fill: #e6edf3; }
+      .m { fill: #8b949e; }
+      .line { stroke: #8b949e; }
+      .head { fill: #8b949e; }
+      .dep { stroke: #a78bfa; }
+      .deptext { fill: #a78bfa; }
+      .dephead { fill: #a78bfa; }
+      .box { fill: #161b22; stroke: #8b949e; }
+      .tool { fill: #161b22; stroke: #484f58; }
+      .region { fill: #11161d; stroke: #484f58; }
+      .vpc { fill: #0c1d3a; stroke: #58a6ff; }
+      .az { stroke: #6e7681; }
+      .subnet { fill: #0b2a20; stroke: #3fb950; }
+      .sg { stroke: #f85149; }
+      .sgtext { fill: #ff7b72; }
+      .s3 { fill: #2a1a0c; stroke: #f0883e; }
+      .net { fill: #161b22; stroke: #8b949e; }
+    }
+  </style>
+  <defs>
+    <marker id="a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" class="head"/></marker>
+    <marker id="d" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0,0 L10,5 L0,10 z" class="dephead"/></marker>
+  </defs>
+
+  <rect class="bg" x="0" y="0" width="960" height="680"/>
+
+  <text class="t" x="20" y="30" font-size="16" font-weight="600">Session 19: what Terraform builds</text>
+  <text class="m" x="20" y="50">Every AWS API call goes to moto on this laptop, not to a real AWS account.</text>
+
+  <rect class="tool" x="20" y="66" width="170" height="44" rx="6"/>
+  <text class="t" x="105" y="85" text-anchor="middle">terraform 1.16.4</text>
+  <text class="m" x="105" y="101" text-anchor="middle">plan, apply, destroy</text>
+  <rect class="tool" x="230" y="66" width="190" height="44" rx="6"/>
+  <text class="t" x="325" y="85" text-anchor="middle">hashicorp/aws 6.67.0</text>
+  <text class="m" x="325" y="101" text-anchor="middle">endpoints + dummy keys</text>
+  <rect class="tool" x="460" y="66" width="190" height="44" rx="6"/>
+  <text class="t" x="555" y="85" text-anchor="middle">http://localhost:18190</text>
+  <text class="m" x="555" y="101" text-anchor="middle">ec2, s3, sts endpoints</text>
+  <rect class="tool" x="690" y="66" width="250" height="44" rx="6"/>
+  <text class="t" x="815" y="85" text-anchor="middle">container hw19-moto</text>
+  <text class="m" x="815" y="101" text-anchor="middle">motoserver/moto, port 5000 inside</text>
+  <path class="line" d="M190,88 H228" marker-end="url(#a)"/>
+  <path class="line" d="M420,88 H458" marker-end="url(#a)"/>
+  <path class="line" d="M650,88 H688" marker-end="url(#a)"/>
+
+  <ellipse class="net" cx="340" cy="152" rx="70" ry="20"/>
+  <text class="t" x="340" y="157" text-anchor="middle">Internet</text>
+
+  <rect class="region" x="20" y="190" width="920" height="440" rx="10"/>
+  <text class="t" x="36" y="212" font-weight="600">Region ap-south-1</text>
+
+  <rect class="vpc" x="44" y="240" width="596" height="370" rx="8"/>
+  <text class="t" x="60" y="292" font-weight="600">VPC hw19-vpc</text>
+  <text class="m" x="60" y="310">10.19.0.0/16, DNS on</text>
+
+  <rect class="box" x="280" y="222" width="120" height="38" rx="6"/>
+  <text class="t" x="340" y="238" text-anchor="middle">Internet gateway</text>
+  <text class="m" x="340" y="253" text-anchor="middle">hw19-igw</text>
+  <path class="line" d="M340,174 V220" marker-start="url(#a)" marker-end="url(#a)"/>
+
+  <rect class="box" x="60" y="340" width="190" height="80" rx="6"/>
+  <text class="t" x="155" y="360" text-anchor="middle">Route table hw19-public-rt</text>
+  <text class="m" x="155" y="378" text-anchor="middle">0.0.0.0/0 to hw19-igw</text>
+  <text class="m" x="155" y="394" text-anchor="middle">10.19.0.0/16 local</text>
+  <text class="m" x="155" y="410" text-anchor="middle">associated with the subnet</text>
+  <path class="line" d="M300,260 V282 H155 V338" marker-end="url(#a)"/>
+  <text class="m" x="200" y="276">route target</text>
+
+  <rect class="az" x="276" y="300" width="350" height="296" rx="6"/>
+  <text class="m" x="288" y="318">Availability zone ap-south-1a</text>
+
+  <rect class="subnet" x="294" y="328" width="314" height="254" rx="6"/>
+  <text class="t" x="308" y="348" font-weight="600">Public subnet hw19-public-subnet</text>
+  <text class="m" x="308" y="365">10.19.1.0/24, map_public_ip_on_launch = true</text>
+  <path class="line" d="M250,372 H292" marker-end="url(#a)"/>
+
+  <rect class="sg" x="318" y="380" width="266" height="188" rx="6"/>
+  <text class="sgtext" x="332" y="400" font-weight="600">Security group hw19-web-sg</text>
+  <text class="m" x="332" y="418">in: tcp 80 from 0.0.0.0/0</text>
+  <text class="m" x="332" y="434">in: tcp 22 from 203.0.113.10/32 only</text>
+  <text class="m" x="332" y="450">out: all</text>
+
+  <rect class="box" x="346" y="464" width="210" height="90" rx="6"/>
+  <text class="t" x="451" y="486" text-anchor="middle" font-weight="600">EC2 hw19-web</text>
+  <text class="m" x="451" y="504" text-anchor="middle">t3.micro, Amazon Linux 2023 AMI</text>
+  <text class="m" x="451" y="520" text-anchor="middle">private 10.19.1.4 + public IP</text>
+  <text class="m" x="451" y="536" text-anchor="middle">user_data installs nginx</text>
+
+  <rect class="s3" x="664" y="240" width="256" height="370" rx="8"/>
+  <text class="t" x="680" y="262" font-weight="600">S3, regional</text>
+  <text class="m" x="680" y="279">lives outside the VPC</text>
+
+  <rect class="box" x="684" y="300" width="216" height="74" rx="6"/>
+  <text class="t" x="792" y="322" text-anchor="middle">Bucket</text>
+  <text class="m" x="792" y="340" text-anchor="middle">hw19-artifacts-24bcs10177</text>
+  <text class="m" x="792" y="358" text-anchor="middle">versioning Enabled, private</text>
+
+  <rect class="box" x="710" y="480" width="164" height="50" rx="6"/>
+  <text class="t" x="792" y="501" text-anchor="middle">Object index.html</text>
+  <text class="m" x="792" y="518" text-anchor="middle">text/html</text>
+  <path class="line" d="M792,374 V478" marker-end="url(#a)"/>
+  <text class="m" x="800" y="430">stored in</text>
+
+  <path class="dep" d="M556,508 H708" marker-end="url(#d)"/>
+  <text class="deptext" x="792" y="556" text-anchor="middle" font-size="12">page content uses the instance ID</text>
+
+  <path class="line" d="M24,652 H54" marker-end="url(#a)"/>
+  <text class="m" x="62" y="656">network path or ownership</text>
+  <path class="dep" d="M260,652 H290" marker-end="url(#d)"/>
+  <text class="m" x="298" y="656">Terraform dependency only, no traffic</text>
+  <text class="m" x="590" y="656">moto records the instance as running, no VM boots</text>
+</svg>

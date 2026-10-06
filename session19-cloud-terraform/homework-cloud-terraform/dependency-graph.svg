@@ -1,0 +1,75 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1110 600" width="1110" height="600" font-family="-apple-system, Segoe UI, Helvetica, Arial, sans-serif" font-size="13">
+  <title>Dependency order from terraform graph</title>
+  <style>
+    .bg { fill: #ffffff; }
+    .t { fill: #0f172a; }
+    .m { fill: #64748b; }
+    .n { fill: #ffffff; stroke: #475569; stroke-width: 1.2; }
+    .data { fill: #f1f5f9; stroke: #94a3b8; stroke-width: 1.2; stroke-dasharray: 4 3; }
+    .e { stroke: #64748b; fill: none; stroke-width: 1.4; }
+    .head { fill: #64748b; }
+    .dep { stroke: #7c3aed; fill: none; stroke-width: 2.2; stroke-dasharray: 6 4; }
+    .dephead { fill: #7c3aed; }
+    .deptext { fill: #7c3aed; }
+    @media (prefers-color-scheme: dark) {
+      .bg { fill: #0d1117; }
+      .t { fill: #e6edf3; }
+      .m { fill: #8b949e; }
+      .n { fill: #161b22; stroke: #8b949e; }
+      .data { fill: #11161d; stroke: #6e7681; }
+      .e { stroke: #8b949e; }
+      .head { fill: #8b949e; }
+      .dep { stroke: #a78bfa; }
+      .dephead { fill: #a78bfa; }
+      .deptext { fill: #a78bfa; }
+    }
+  </style>
+  <defs>
+    <marker id="a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0,0 L10,5 L0,10 z" class="head"/></marker>
+    <marker id="d" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0,0 L10,5 L0,10 z" class="dephead"/></marker>
+  </defs>
+  <rect class="bg" x="0" y="0" width="1110" height="600"/>
+  <text class="t" x="20" y="28" font-size="16" font-weight="600">Dependency order, drawn from terraform graph</text>
+  <text class="m" x="20" y="48">Arrows point in creation order. Apply walks top to bottom, destroy walks bottom to top.</text>
+  <path class="e" d="M415,104 C415,127.0 145,127.0 145,148" marker-end="url(#a)"/>
+  <path class="e" d="M415,104 C415,127.0 415,127.0 415,148" marker-end="url(#a)"/>
+  <path class="e" d="M415,104 C415,127.0 685,127.0 685,148" marker-end="url(#a)"/>
+  <path class="e" d="M955,104 C955,127.0 955,127.0 955,148" marker-end="url(#a)"/>
+  <path class="e" d="M415,184 C415,207.0 415,207.0 415,228" marker-end="url(#a)"/>
+  <path class="e" d="M415,264 C415,287.0 145,287.0 145,308" marker-end="url(#a)"/>
+  <path class="e" d="M145,184 C145,247.0 145,247.0 145,308" marker-end="url(#a)"/>
+  <path class="dep" d="M145,344 C145,384 685,350 685,388" marker-end="url(#d)"/>
+  <path class="e" d="M685,184 C685,287.0 685,287.0 685,388" marker-end="url(#a)"/>
+  <path class="e" d="M955,344 C955,367.0 685,367.0 685,388" marker-end="url(#a)"/>
+  <path class="e" d="M685,424 C685,447.0 955,447.0 955,468" marker-end="url(#a)"/>
+  <path class="e" d="M1085,87 H1098 V487 H1087" marker-end="url(#a)"/>
+  <rect class="n" x="285" y="70" width="260" height="34" rx="6"/>
+  <text class="t" x="415" y="92" text-anchor="middle" font-family="SFMono-Regular, Menlo, Consolas, monospace" font-size="11.5">aws_vpc.main</text>
+  <rect class="n" x="825" y="70" width="260" height="34" rx="6"/>
+  <text class="t" x="955" y="92" text-anchor="middle" font-family="SFMono-Regular, Menlo, Consolas, monospace" font-size="11.5">aws_s3_bucket.artifacts</text>
+  <rect class="n" x="15" y="150" width="260" height="34" rx="6"/>
+  <text class="t" x="145" y="172" text-anchor="middle" font-family="SFMono-Regular, Menlo, Consolas, monospace" font-size="11.5">aws_subnet.public</text>
+  <rect class="n" x="285" y="150" width="260" height="34" rx="6"/>
+  <text class="t" x="415" y="172" text-anchor="middle" font-family="SFMono-Regular, Menlo, Consolas, monospace" font-size="11.5">aws_internet_gateway.main</text>
+  <rect class="n" x="555" y="150" width="260" height="34" rx="6"/>
+  <text class="t" x="685" y="172" text-anchor="middle" font-family="SFMono-Regular, Menlo, Consolas, monospace" font-size="11.5">aws_security_group.web</text>
+  <rect class="n" x="825" y="150" width="260" height="34" rx="6"/>
+  <text class="t" x="955" y="172" text-anchor="middle" font-family="SFMono-Regular, Menlo, Consolas, monospace" font-size="11.5">aws_s3_bucket_versioning.artifacts</text>
+  <rect class="n" x="285" y="230" width="260" height="34" rx="6"/>
+  <text class="t" x="415" y="252" text-anchor="middle" font-family="SFMono-Regular, Menlo, Consolas, monospace" font-size="11.5">aws_route_table.public</text>
+  <rect class="n" x="15" y="310" width="260" height="34" rx="6"/>
+  <text class="t" x="145" y="332" text-anchor="middle" font-family="SFMono-Regular, Menlo, Consolas, monospace" font-size="11.5">aws_route_table_association.public</text>
+  <rect class="data" x="825" y="310" width="260" height="34" rx="6"/>
+  <text class="t" x="955" y="332" text-anchor="middle" font-family="SFMono-Regular, Menlo, Consolas, monospace" font-size="11.5">data.aws_ami.al2023</text>
+  <rect class="n" x="555" y="390" width="260" height="34" rx="6"/>
+  <text class="t" x="685" y="412" text-anchor="middle" font-family="SFMono-Regular, Menlo, Consolas, monospace" font-size="11.5">aws_instance.web</text>
+  <rect class="n" x="825" y="470" width="260" height="34" rx="6"/>
+  <text class="t" x="955" y="492" text-anchor="middle" font-family="SFMono-Regular, Menlo, Consolas, monospace" font-size="11.5">aws_s3_object.index</text>
+  <text class="deptext" x="150" y="410" font-size="12">depends_on, the only edge</text>
+  <text class="deptext" x="150" y="426" font-size="12">Terraform could not infer</text>
+  <path class="e" d="M24,546 H54" marker-end="url(#a)"/>
+  <text class="m" x="62" y="550">implicit, from a reference such as aws_vpc.main.id</text>
+  <path class="dep" d="M420,546 H450" marker-end="url(#d)"/>
+  <text class="m" x="458" y="550">explicit depends_on</text>
+  <text class="m" x="20" y="580">terraform graph drops edges it can reach another way, so the instance to subnet reference is implied through the association.</text>
+</svg>
