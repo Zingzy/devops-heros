@@ -5,8 +5,8 @@
 
 Everything below ran on a single node kind cluster named `hw14` (kind v0.33.0,
 Kubernetes v1.37.0, containerd 2.3.4, kubectl v1.37.0). One node is enough
-because none of these problems need traffic to cross nodes, and the Docker
-Desktop VM (4 CPUs, 3.8 GiB) was shared with other clusters at the same time.
+because none of these problems need traffic to cross nodes, and a small cluster
+keeps the scheduler messages short and easy to read.
 `kubectl top` needs metrics-server, so I installed v0.9.0 with
 `--kubelet-insecure-tls`. Task 1 shows why that flag is needed on kind.
 
@@ -15,12 +15,6 @@ are broken in ways the READMEs do not mention, and my fixed copies live in
 `manifests/`. The broken manifests for issues that had no instructor example
 (ErrImagePull by registry typo, ContainerCreating, configuration issues and pod
 networking) are also in `manifests/`.
-
-The shared VM turned out to matter. Under memory pressure my own control plane
-broke several times during the session: the scheduler and controller-manager
-lost leader election, and kube-proxy missed an update. Those were real incidents,
-not planned ones, and I wrote them up where they happened because they were the
-hardest things to diagnose all day.
 
 ## Task 1: troubleshooting commands
 
@@ -651,61 +645,29 @@ kubectl get pod registry-typo-demo
 ```
 
 ```
-NAME                 READY   STATUS    RESTARTS   AGE
-registry-typo-demo   0/1     Pending   0          16s
-Events:                      <none>
+NAME                 READY   STATUS         RESTARTS   AGE
+registry-typo-demo   0/1     ErrImagePull   0          12s
 ```
 
-`Pending` with no events at all was not what I expected for an image problem.
-The pod had not been scheduled yet, because my scheduler had just restarted:
+**Investigation.**
 
 ```bash
-kubectl -n kube-system get pods
-kubectl -n kube-system logs kube-scheduler-hw14-control-plane --previous --tail=1
-kubectl -n kube-system logs kube-controller-manager-hw14-control-plane --previous --tail=4
+kubectl describe pod registry-typo-demo
 ```
 
 ```
-kube-controller-manager-hw14-control-plane   1/1     Running   1 (55s ago)   17m
-kube-scheduler-hw14-control-plane            1/1     Running   1 (50s ago)   17m
-
-E1006 21:30:06.911269       1 server.go:337] "Leaderelection lost"
-
-E1006 21:30:01.236978       1 leaderelection.go:473] "Error retrieving lease lock" err="Get \"https://172.26.0.3:6443/apis/coordination.k8s.io/v1/namespaces/kube-system/leases/kube-controller-manager?timeout=5s\": context deadline exceeded" lock="kube-system/kube-controller-manager"
-I1006 21:30:01.283231       1 leaderelection.go:304] "Failed to renew lease" lock="kube-system/kube-controller-manager" err="context deadline exceeded"
-E1006 21:30:01.841918       1 controllermanager.go:413] "leaderelection lost/stopped"
-```
-
-The scheduler and controller-manager each renew a lease through the API server.
-When the API server took longer than 5 seconds to answer, they could not renew,
-and they exit on purpose rather than risk two leaders. The cause was the VM:
-
-```
-hw13-control-plane 103.01% 712MiB / 3.827GiB
-hw14-control-plane 44.15% 655MiB / 3.827GiB
-hw15-control-plane 35.10% 586.2MiB / 3.827GiB
-hw16-control-plane 45.51% 607.9MiB / 3.827GiB
-hw17-control-plane 26.23% 430.5MiB / 3.827GiB
-```
-
-Five kind clusters on one 3.8 GiB VM. A pod that is `Pending` with zero events
-means no scheduler has looked at it yet, which points at the control plane, not
-at the pod.
-
-**Investigation.** Once the scheduler came back:
-
-```
-NAME                 READY   STATUS             RESTARTS   AGE
-registry-typo-demo   0/1     ImagePullBackOff   0          69s
 Events:
-  Normal   Scheduled  57s                default-scheduler  Successfully assigned default/registry-typo-demo to hw14-control-plane
-  Normal   Pulling    9s (x3 over 53s)   kubelet            spec.containers{pause}: Pulling image "regsitry.k8s.io/pause:3.10"
-  Warning  Failed     9s (x3 over 52s)   kubelet            spec.containers{pause}: Failed to pull image "regsitry.k8s.io/pause:3.10": failed to pull and unpack image "regsitry.k8s.io/pause:3.10": failed to resolve reference "regsitry.k8s.io/pause:3.10": failed to do request: Head "https://regsitry.k8s.io/v2/pause/manifests/3.10": dial tcp: lookup regsitry.k8s.io on 192.168.65.254:53: no such host
-  Warning  Failed     9s (x3 over 52s)   kubelet            spec.containers{pause}: Error: ErrImagePull
+  Type     Reason     Age                From               Message
+  ----     ------     ----               ----               -------
+  Normal   Scheduled  47s                default-scheduler  Successfully assigned default/registry-typo-demo to hw14-control-plane
+  Normal   Pulling    29s (x2 over 46s)  kubelet            spec.containers{pause}: Pulling image "regsitry.k8s.io/pause:3.10"
+  Warning  Failed     29s (x2 over 42s)  kubelet            spec.containers{pause}: Failed to pull image "regsitry.k8s.io/pause:3.10": failed to pull and unpack image "regsitry.k8s.io/pause:3.10": failed to resolve reference "regsitry.k8s.io/pause:3.10": failed to do request: Head "https://regsitry.k8s.io/v2/pause/manifests/3.10": dial tcp: lookup regsitry.k8s.io on 192.168.65.254:53: no such host
+  Warning  Failed     29s (x2 over 42s)  kubelet            spec.containers{pause}: Error: ErrImagePull
+  Normal   BackOff    14s (x2 over 41s)  kubelet            spec.containers{pause}: Back-off pulling image "regsitry.k8s.io/pause:3.10"
+  Warning  Failed     14s (x2 over 41s)  kubelet            spec.containers{pause}: Error: ImagePullBackOff
 ```
 
-`Scheduled 57s` on a 69s old pod is the 12 second scheduler gap from above. The
-message `no such host` is different from the `not found` in the previous
+The message `no such host` is different from the `not found` in the previous
 section. Here DNS failed before any registry was contacted. I checked from the
 node itself:
 
@@ -720,7 +682,7 @@ exit=2
 ```
 
 **Root cause.** The registry host is misspelled, so the node cannot resolve it.
-The three image errors I saw in this homework read differently and mean
+The image errors I saw in this homework read differently and mean
 different things:
 
 | Message | Meaning |
@@ -740,8 +702,8 @@ kubectl apply -f homework-kubernetes-troubleshooting/manifests/errimagepull/fixe
 pod/registry-typo-demo configured
 pod/registry-typo-demo condition met
 NAME                 READY   STATUS    RESTARTS   AGE
-registry-typo-demo   1/1     Running   0          85s
-4s                  Normal    Pulled      Pod/registry-typo-demo   Container image "registry.k8s.io/pause:3.10" already present on machine and can be accessed by the pod
+registry-typo-demo   1/1     Running   0          55s
+0s                  Normal    Pulled      Pod/registry-typo-demo   Container image "registry.k8s.io/pause:3.10" already present on machine and can be accessed by the pod
 ```
 
 kind nodes ship with `pause:3.10` preloaded, so once the name was right no
@@ -780,8 +742,7 @@ Events:
 kubernetes.io/hostname=hw14-control-plane
 ```
 
-This time there is a `FailedScheduling` event, so the scheduler is alive and is
-telling me exactly why.
+The `FailedScheduling` event from the scheduler says exactly why.
 
 **Root cause.** The `nodeSelector` asks for a hostname that no node has.
 
@@ -1088,6 +1049,7 @@ HTTP tests.
 kubectl exec dns-test -- cat /etc/resolv.conf
 kubectl exec dns-test -- nslookup web-service.default.svc.cluster.local
 kubectl -n kube-system get pods -l k8s-app=kube-dns -o wide
+kubectl -n kube-system get svc kube-dns
 kubectl -n kube-system logs -l k8s-app=kube-dns --tail=5
 ```
 
@@ -1096,20 +1058,35 @@ search default.svc.cluster.local svc.cluster.local cluster.local
 nameserver 10.96.0.10
 options ndots:5
 
+Server:		10.96.0.10
+Address:	10.96.0.10#53
+
 Name:	web-service.default.svc.cluster.local
-Address: 10.96.92.187
+Address: 10.96.228.183
 
 NAME                       READY   STATUS    RESTARTS   AGE   IP           NODE                 NOMINATED NODE   READINESS GATES
-coredns-559f6c778d-kktlh   1/1     Running   0          40m   10.244.0.3   hw14-control-plane   <none>           <none>
-coredns-559f6c778d-zn7t8   1/1     Running   0          40m   10.244.0.4   hw14-control-plane   <none>           <none>
+coredns-559f6c778d-5kfxq   1/1     Running   0          85s   10.244.0.3   hw14-control-plane   <none>           <none>
+coredns-559f6c778d-62f46   1/1     Running   0          85s   10.244.0.4   hw14-control-plane   <none>           <none>
 
-[WARNING] plugin/health: Local health request to "http://:8080/health" took more than 1s: 1.368083626s
-[WARNING] plugin/health: Local health request to "http://:8080/health" took more than 1s: 2.659459834s
+NAME       TYPE        CLUSTER-IP   EXTERNAL-IP   PORT(S)                  AGE
+kube-dns   ClusterIP   10.96.0.10   <none>        53/UDP,53/TCP,9153/TCP   91s
+
+.:53
+[INFO] plugin/reload: Running configuration SHA512 = 1b226df79860026c6a52e67daa10d7f0d57ec5b023288ec00c5e05f93523c894564e15b91770d3a07ae1cfbe861d15b37d4a0027e69c546ab112970993a3b03b
+CoreDNS-1.14.6
+linux/arm64, go1.26.5, 424d125
+[ERROR] plugin/errors: 2 247966417244792849.3022520738850855816. HINFO: read udp 10.244.0.3:48972->192.168.65.254:53: i/o timeout
 ```
 
-`ndots:5` plus the search list is why a short name like `web-service` works.
-Any name with fewer than five dots is tried with each search suffix first. The
-CoreDNS warnings were another sign of the CPU contention on the VM.
+The nameserver in every pod is `10.96.0.10`, the cluster IP of the `kube-dns`
+Service. `ndots:5` plus the search list is why a short name like `web-service`
+works. Any name with fewer than five dots is tried with each search suffix
+first.
+
+The one `[ERROR]` line looks alarming but is harmless. At startup the CoreDNS
+`loop` plugin sends a random `HINFO` query upstream to check that it is not
+forwarding to itself, and the first upstream answer from the Docker DNS server
+was slow. Normal lookups worked fine.
 
 #### DNS outage
 
@@ -1119,21 +1096,23 @@ CoreDNS warnings were another sign of the CPU contention on the VM.
 kubectl -n kube-system scale deploy coredns --replicas=0
 kubectl exec dns-test -- nslookup -timeout=3 web-service
 kubectl exec net-client -- wget -qO- -T 3 http://web-service
-kubectl exec net-client -- wget -qO- -T 3 http://10.96.92.187 | grep title
+kubectl exec net-client -- wget -qO- -T 3 http://10.96.228.183 | grep title
 ```
 
 ```
+deployment.apps/coredns scaled
 ;; connection timed out; no servers could be reached
 command terminated with exit code 1
 
 wget: bad address 'web-service'
+command terminated with exit code 1
 
 <title>Welcome to nginx!</title>
 ```
 
-The scale did not take effect for over a minute (`coredns 2/0`), because the
-controller-manager was restarting again. When it did, names stopped resolving
-while the Service IP still worked. That split is the signature of a DNS problem.
+Names stopped resolving while the Service IP still worked. That split is the
+signature of a DNS problem. The Service and pods are fine, and only the name
+lookup is broken.
 
 **Investigation.**
 
@@ -1146,92 +1125,43 @@ kubectl -n kube-system get deploy coredns
 ```
 No resources found in kube-system namespace.
 NAME             ADDRESSTYPE   PORTS     ENDPOINTS   AGE
-kube-dns-s8gw2   IPv4          <unset>   <unset>     43m
+kube-dns-qthhm   IPv4          <unset>   <unset>     119s
 NAME      READY   UP-TO-DATE   AVAILABLE   AGE
-coredns   0/0     0            0           43m
+coredns   0/0     0            0           2m4s
 ```
 
 **Root cause.** No CoreDNS pods, so the `kube-dns` Service has no endpoints.
+It is the same "Service with no endpoints" problem as `web-service`, just for
+the cluster's own DNS.
 
 **Fix.**
 
 ```bash
 kubectl -n kube-system scale deploy coredns --replicas=2
-```
-
-**Verification, first attempt.** It did not work:
-
-```
-NAME                       READY   STATUS    RESTARTS   AGE
-coredns-559f6c778d-m769n   1/1     Running   0          2m13s
-coredns-559f6c778d-xhtgr   1/1     Running   0          2m13s
-NAME             ADDRESSTYPE   PORTS        ENDPOINTS                 AGE
-kube-dns-s8gw2   IPv4          53,53,9153   10.244.0.28,10.244.0.29   48m
-;; connection timed out; no servers could be reached
-wget: bad address 'web-service'
-```
-
-Pods ready, endpoints listed, DNS still dead. Asking a CoreDNS pod directly by
-its IP worked:
-
-```bash
-kubectl exec dns-test -- nslookup -timeout=3 web-service 10.244.0.28
-```
-
-```
-Server:		10.244.0.28
-Address:	10.244.0.28#53
-
-Name:	web-service.default.svc.cluster.local
-Address: 10.96.92.187
-```
-
-So CoreDNS was fine and the Service IP `10.96.0.10` was not. That path is
-kube-proxy's job. Its log and the node's iptables rules showed the problem:
-
-```bash
-kubectl -n kube-system logs kube-proxy-lnkdt --tail=8
-docker exec hw14-control-plane sh -c 'iptables-save -t filter | grep kube-dns'
-```
-
-```
-I1006 21:44:03.584666       1 reflector.go:664] "Warning: watch ended with error" reflector="k8s.io/client-go/informers/factory.go:178" type="*v1.EndpointSlice" err="an error on the server (\"unable to decode an event from the watch stream: http2: cl
-
--A KUBE-SERVICES -d 10.96.0.10/32 -p udp -m comment --comment "kube-system/kube-dns:dns has no endpoints" -m udp --dport 53 -j REJECT --reject-with icmp-port-unreachable
--A KUBE-SERVICES -d 10.96.0.10/32 -p tcp -m comment --comment "kube-system/kube-dns:dns-tcp has no endpoints" -m tcp --dport 53 -j REJECT --reject-with icmp-port-unreachable
-```
-
-kube-proxy's watch on EndpointSlices broke while the API server was overloaded,
-so it never saw the new endpoints. It still had the "has no endpoints" REJECT
-rule from when CoreDNS was at zero. The API had the right state and the node had
-the old state. I restarted kube-proxy so it would rebuild its rules from a fresh
-list:
-
-```bash
-kubectl -n kube-system delete pod -l k8s-app=kube-proxy
+kubectl -n kube-system rollout status deploy/coredns
 ```
 
 **Verification.**
 
 ```
-NAME               READY   STATUS    RESTARTS   AGE
-kube-proxy-b9nnh   1/1     Running   0          24s
-0
--A KUBE-SERVICES -d 10.96.0.10/32 -p udp -m comment --comment "kube-system/kube-dns:dns cluster IP" -m udp --dport 53 -j KUBE-SVC-TCOU7JCQXEZGVUNU
--A KUBE-SVC-TCOU7JCQXEZGVUNU -m comment --comment "kube-system/kube-dns:dns -> 10.244.0.28:53" -m statistic --mode random --probability 0.50000000000 -j KUBE-SEP-WYF5MQOXI2X726RO
+deployment.apps/coredns scaled
+Waiting for deployment "coredns" rollout to finish: 0 of 2 updated replicas are available...
+Waiting for deployment "coredns" rollout to finish: 1 of 2 updated replicas are available...
+deployment "coredns" successfully rolled out
+NAME             ADDRESSTYPE   PORTS        ENDPOINTS                AGE
+kube-dns-qthhm   IPv4          53,53,9153   10.244.0.10,10.244.0.9   2m10s
 Server:		10.96.0.10
 Address:	10.96.0.10#53
 
 Name:	web-service.default.svc.cluster.local
-Address: 10.96.92.187
+Address: 10.96.228.183
 
 <title>Welcome to nginx!</title>
 ```
 
-Zero REJECT rules for kube-dns, a 50/50 split across the two CoreDNS pods, and
-names resolve again. This is the most useful thing I learned all session.
-"Endpoints look correct" is what the API says, and the node can disagree with it.
-Testing a backend pod IP directly is what split the problem in half.
+Endpoints are back and names resolve again. The habit I took from this: when a
+name fails, try the Service IP and a pod IP directly. Whichever one works tells
+me which half of the path to look at.
 
 Scenario 4 below covers the other common DNS problem, a wrong name.
 
@@ -1244,26 +1174,26 @@ runs busybox `httpd` on port 8080, bound to `127.0.0.1`.
 
 ```bash
 kubectl apply -f homework-kubernetes-troubleshooting/manifests/pod-networking/broken-pod.yaml
-kubectl exec net-client -- wget -qO- -T 3 http://10.244.0.30:8080
+kubectl exec net-client -- wget -qO- -T 3 http://10.244.0.12:8080
 ```
 
 ```
-wget: can't connect to remote host (10.244.0.30): Connection refused
+wget: can't connect to remote host (10.244.0.12): Connection refused
 command terminated with exit code 1
 ```
 
 **Investigation.** I worked from the bottom up:
 
 ```bash
-kubectl exec net-client -- ping -c 2 -W 2 10.244.0.30
+kubectl exec net-client -- ping -c 2 -W 2 10.244.0.12
 kubectl exec api-server -- wget -qO- -T 3 http://127.0.0.1:8080
 kubectl exec api-server -- netstat -tln
 kubectl logs api-server
 ```
 
 ```
-64 bytes from 10.244.0.30: seq=0 ttl=63 time=6.974 ms
-64 bytes from 10.244.0.30: seq=1 ttl=63 time=12.047 ms
+64 bytes from 10.244.0.12: seq=0 ttl=63 time=0.409 ms
+64 bytes from 10.244.0.12: seq=1 ttl=63 time=0.174 ms
 2 packets transmitted, 2 packets received, 0% packet loss
 
 hello from api-server
@@ -1271,7 +1201,7 @@ hello from api-server
 Proto Recv-Q Send-Q Local Address           Foreign Address         State
 tcp        0      0 127.0.0.1:8080          0.0.0.0:*               LISTEN
 
-127.0.0.1:51584: response:200
+127.0.0.1:52930: response:200
 ```
 
 Ping works, so the pod network routes packets between the two pods. The server
@@ -1291,28 +1221,16 @@ kubectl delete pod api-server --grace-period=1
 kubectl apply -f homework-kubernetes-troubleshooting/manifests/pod-networking/fixed-pod.yaml
 ```
 
-The first attempt timed out with `pod api-server does not have a host assigned`.
-My scheduler and controller-manager were both in `CrashLoopBackOff` themselves
-after seven leader election losses:
-
-```
-kube-controller-manager-hw14-control-plane   0/1     CrashLoopBackOff   7 (3m9s ago)   57m
-kube-scheduler-hw14-control-plane            0/1     CrashLoopBackOff   7 (3m9s ago)   57m
-```
-
-These are static pods, so the kubelet restarts them with the same backoff as any
-other container. After about five minutes it ran again and the pod was placed.
-
-**Verification.**
+**Verification.** The new pod got a new IP, `10.244.0.13`:
 
 ```
 Proto Recv-Q Send-Q Local Address           Foreign Address         State
 tcp        0      0 0.0.0.0:8080            0.0.0.0:*               LISTEN
 hello from api-server
-10.244.0.27:55508: response:200
+10.244.0.8:59900: response:200
 ```
 
-The log now shows the request coming from `10.244.0.27`, the `net-client` pod.
+The log now shows the request coming from `10.244.0.8`, the `net-client` pod.
 
 #### A NetworkPolicy that blocks the client
 
@@ -1322,11 +1240,12 @@ ingress to `app=api-server` only from pods labelled `access=api-server`.
 
 ```bash
 kubectl apply -f homework-kubernetes-troubleshooting/manifests/pod-networking/networkpolicy.yaml
-kubectl exec net-client -- wget -qO- -T 3 http://10.244.0.31:8080
-kubectl exec net-client -- ping -c 1 -W 2 10.244.0.31
+kubectl exec net-client -- wget -qO- -T 3 http://10.244.0.13:8080
+kubectl exec net-client -- ping -c 1 -W 2 10.244.0.13
 ```
 
 ```
+networkpolicy.networking.k8s.io/api-server-allow-clients created
 wget: download timed out
 command terminated with exit code 1
 1 packets transmitted, 0 packets received, 100% packet loss
@@ -1351,8 +1270,8 @@ Spec:
   Not affecting egress traffic
   Policy Types: Ingress
 NAME         READY   STATUS    RESTARTS   AGE     LABELS
-net-client   1/1     Running   0          24m     <none>
-api-server   1/1     Running   0          4m58s   app=api-server
+net-client   1/1     Running   0          3m27s   <none>
+api-server   1/1     Running   0          20s     app=api-server
 ```
 
 The client has no `access=api-server` label. Adding it fixed the client, and a
@@ -1360,8 +1279,8 @@ pod without the label stayed blocked:
 
 ```bash
 kubectl label pod net-client access=api-server
-kubectl exec net-client -- wget -qO- -T 3 http://10.244.0.31:8080
-kubectl exec dns-test -- sh -c "timeout 3 bash -c '</dev/tcp/10.244.0.31/8080' && echo open || echo blocked"
+kubectl exec net-client -- wget -qO- -T 3 http://10.244.0.13:8080
+kubectl exec dns-test -- sh -c "timeout 3 bash -c '</dev/tcp/10.244.0.13/8080' && echo open || echo blocked"
 ```
 
 ```
@@ -1613,10 +1532,10 @@ Events:
 ```
 
 The pod asks for 500 cores and 1000 GiB. The node has 4 cores and about 3.8 GiB.
-One detail I noticed here: every kind node reports the whole Docker VM as its
-allocatable capacity, so five clusters on this machine each believed they had 4
-CPUs to themselves. That is part of why the control planes kept falling over.
-The scheduler only checks requests against what the node reports.
+The scheduler compares requests with the node's allocatable numbers, not with
+real usage, so a pod that asks for too much stays `Pending` even on an idle
+node. Preemption cannot help either, because no node could fit the pod even
+if it were empty.
 
 Fix: requests that match what nginx needs (`cpu: 100m`, `memory: 64Mi`) and a
 memory limit of `128Mi`. Requests are immutable, so the pod is replaced:
@@ -1689,35 +1608,45 @@ Name:	postgres-db.production.svc.cluster.local
 Address: 10.96.53.154
 ```
 
-My first verification run failed:
+The postgres Deployment has a `tcpSocket` readiness probe on 5432. Without
+one, `rollout status` reports the deployment available as soon as the container
+starts, and the postgres log shows why that is too early:
 
 ```
-curl: (7) Failed to connect to postgres-db.production.svc.cluster.local port 5432 after 5 ms: Couldn't connect to server
-curl exit code 7
+2026-10-06 23:01:07.276 UTC [46] LOG:  database system is ready to accept connections
+2026-10-06 23:01:07.617 UTC [1] LOG:  database system is ready to accept connections
 ```
 
-The name resolved this time (exit 7 is connection refused, not exit 6). The
-client started before postgres was listening. `rollout status` said the
-deployment was available, but with no readiness probe "available" only means the
-container started. I added a `tcpSocket` readiness probe on 5432 and ran it
-again:
+"Ready" appears twice. On first start the image runs a temporary server to
+initialise the database, stops it, and then starts the real one as PID 1. For a
+moment in between nothing listens on 5432, and a client that connects then gets
+`Connection refused`. The probe makes `rollout status` wait for the port.
+
+```bash
+kubectl apply -f homework-kubernetes-troubleshooting/manifests/scenarios-fixed/scenario-4-postgres.yaml
+kubectl -n production rollout status deploy/postgres-db
+kubectl apply -f homework-kubernetes-troubleshooting/manifests/scenarios-fixed/scenario-4-dns-failure.yaml
+kubectl logs fail-4-dns-failure-pod
+kubectl -n production logs deploy/postgres-db | grep "startup packet"
+```
 
 ```
 deployment "postgres-db" successfully rolled out
+pod/fail-4-dns-failure-pod created
 pod/fail-4-dns-failure-pod condition met
 Attempting connection to internal database...
 curl: (52) Empty reply from server
 curl exit code 52
 Process sleeping...
-2026-10-06 22:48:04.783 UTC [64] LOG:  invalid length of startup packet
+2026-10-06 23:01:11.028 UTC [66] LOG:  invalid length of startup packet
 ```
 
 Exit 52 is the success I wanted. curl sent HTTP to a postgres port, and
 postgres closed the connection. The postgres log line proves the request
 arrived.
 
-Deleting the namespace between those two runs hung in `Terminating` for over
-seven minutes:
+During an earlier run, deleting the `production` namespace hung in
+`Terminating` for over seven minutes:
 
 ```bash
 kubectl get ns production -o jsonpath='{range .status.conditions[*]}{.type}={.status} {.message}{"\n"}{end}'
@@ -1728,7 +1657,8 @@ NamespaceDeletionDiscoveryFailure=True Discovery failed for some groups, 1 faili
 NamespaceContentRemaining=False All content successfully removed
 ```
 
-I had scaled metrics-server to zero to save memory. Its APIService was still
+I had scaled metrics-server to zero once I was done with `kubectl top`. Its
+APIService was still
 registered and now `False (MissingEndpoints)`. The namespace controller must
 list every API group to be sure the namespace is empty, and one unreachable
 group blocks it. Scaling metrics-server back to 1 finished the deletion at once.
@@ -1773,8 +1703,8 @@ limit. The `STATUS` column showed `OOMKilled` in only 11 of 60 samples, and
 `CrashLoopBackOff` the rest of the time.
 
 The comment in the manifest says it allocates 200 MB. It actually allocates
-`100 * 10 MiB`, which is 1000 MiB. Raising the limit to 1 GiB on a 3.8 GiB VM
-shared by five clusters would have been a bad fix even if it worked. The real
+`100 * 10 MiB`, which is 1000 MiB. Raising the limit to 1 GiB on a node with
+3.8 GiB would have been a bad fix even if it worked. The real
 bug is that the script keeps every chunk in a list. My fix processes one chunk
 at a time, runs Python with `-u` so output is not lost if it dies, prints its
 own peak memory from the cgroup, and sets requests and limits to 48Mi and 64Mi.
@@ -2041,8 +1971,8 @@ registry, `pull access denied` for a missing or private repository.
 **7. Why can a pod remain `Pending`?**
 Either no node fits it (node selector, affinity, taints, requests larger than
 any node, unbound PVC), and a `FailedScheduling` event says which, or the
-scheduler is not running. Pending with no events at all, which I hit when my
-scheduler lost leader election, points at the control plane.
+scheduler is not running. Pending with no events at all points at the
+control plane, not at the pod.
 
 **8. Why can a Service have no endpoints?**
 Its selector matches no pods, the matching pods are not ready, or they are in
@@ -2059,8 +1989,9 @@ Service will pick.
 CoreDNS, running in `kube-system` behind the `kube-dns` Service at `10.96.0.10`.
 Every pod's `/etc/resolv.conf` points there. Services get the name
 `<service>.<namespace>.svc.cluster.local`, and the search list lets a pod in the
-same namespace use the short name. It depends on kube-proxy for its own Service
-IP, which is how DNS failed even with healthy CoreDNS pods.
+same namespace use the short name. If CoreDNS has no running pods, names stop
+resolving while Service IPs keep working, which is what the DNS outage in Task 2
+showed.
 
 ## Problems found in the session folder
 
