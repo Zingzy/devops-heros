@@ -76,7 +76,7 @@ def greet(name):
         f"Hi {name}! May your pipelines always pass! ✅",
     ]
     return jsonify({
-        "message": random.choice(greetings),
+        "message": random.choice(greetings),  # nosec B311
         "name": name,
         "timestamp": datetime.datetime.utcnow().isoformat() + "Z",
     })
@@ -187,13 +187,13 @@ def run_pipeline():
         if failed:
             status = "skipped"
             duration = 0
-        elif random.random() < float(fail_chance):
+        elif random.random() < float(fail_chance):  # nosec B311
             status = "failed"
-            duration = round(random.uniform(0.5, 5.0), 2)
+            duration = round(random.uniform(0.5, 5.0), 2)  # nosec B311
             failed = True
         else:
             status = "passed"
-            duration = round(random.uniform(0.5, 15.0), 2)
+            duration = round(random.uniform(0.5, 15.0), 2)  # nosec B311
 
         stages.append({
             "name": stage["name"],
@@ -204,7 +204,7 @@ def run_pipeline():
 
     overall = "failed" if failed else "passed"
     total_time = round(sum(s["duration_s"] for s in stages), 2)
-    run_id = f"run-{random.randint(1000, 9999)}"
+    run_id = f"run-{random.randint(1000, 9999)}"  # nosec B311
 
     return jsonify({
         "run_id": run_id,
@@ -231,4 +231,4 @@ def server_error(e):
 
 
 if __name__ == "__main__":
-    app.run(host="0.0.0.0", port=5001, debug=True)
+    app.run(port=5001)
