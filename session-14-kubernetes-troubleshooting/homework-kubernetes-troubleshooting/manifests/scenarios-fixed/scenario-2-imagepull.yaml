@@ -1,0 +1,12 @@
+apiVersion: v1
+kind: Pod
+metadata:
+  name: fail-2-imagepull-pod
+  labels:
+    tier: triage-gauntlet
+    scenario: imagepull
+spec:
+  containers:
+    - name: web-app
+      # yatri-api-service is not published to any registry, so a real public image stands in for it.
+      image: nginx:1.27-alpine
