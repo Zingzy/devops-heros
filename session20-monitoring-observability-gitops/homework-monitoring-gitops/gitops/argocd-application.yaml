@@ -1,0 +1,21 @@
+# Applied once by hand. It lives outside the synced path so Argo CD does not manage itself.
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: hw20-gitops-app
+  namespace: argocd
+spec:
+  project: default
+  source:
+    repoURL: https://github.com/Zingzy/devops-heros.git
+    targetRevision: main
+    path: session20-monitoring-observability-gitops/homework-monitoring-gitops/gitops/app
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: hw20-gitops
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true
