@@ -1,0 +1,7 @@
+apiVersion: 1
+providers:
+  - name: homework
+    folder: Session 20
+    type: file
+    options:
+      path: /var/lib/grafana/dashboards

@@ -1,0 +1,67 @@
+name: hw20-monitoring
+
+services:
+  demo-app:
+    image: python:3.12-alpine
+    container_name: hw20-demo-app
+    command: ["python", "-u", "/app/app.py"]
+    environment:
+      OTLP_TRACES_URL: http://jaeger:4318/v1/traces
+    volumes:
+      - ./app:/app:ro
+    ports:
+      - "18202:8000"
+    mem_limit: 64m
+
+  loadgen:
+    image: python:3.12-alpine
+    container_name: hw20-loadgen
+    command: ["sh", "-c", "while true; do wget -q -O /dev/null http://demo-app:8000/work; sleep 0.5; done"]
+    depends_on:
+      - demo-app
+    mem_limit: 16m
+
+  node-exporter:
+    image: prom/node-exporter:v1.9.1
+    container_name: hw20-node-exporter
+    command: ["--path.rootfs=/host"]
+    pid: host
+    volumes:
+      - /:/host:ro
+    mem_limit: 64m
+
+  prometheus:
+    image: prom/prometheus:v3.5.0
+    container_name: hw20-prometheus
+    command:
+      - --config.file=/etc/prometheus/prometheus.yml
+      - --storage.tsdb.retention.time=1d
+    ports:
+      - "18200:9090"
+    volumes:
+      - ./prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - ./alert-rules.yml:/etc/prometheus/alert-rules.yml:ro
+    mem_limit: 256m
+
+  grafana:
+    image: grafana/grafana:12.1.1
+    container_name: hw20-grafana
+    environment:
+      GF_AUTH_ANONYMOUS_ENABLED: "true"
+      GF_AUTH_ANONYMOUS_ORG_ROLE: Viewer
+      GF_NEWS_NEWS_FEED_ENABLED: "false"
+    ports:
+      - "18201:3000"
+    volumes:
+      - ./grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./grafana/dashboards:/var/lib/grafana/dashboards:ro
+    depends_on:
+      - prometheus
+    mem_limit: 256m
+
+  jaeger:
+    image: jaegertracing/jaeger:2.10.0
+    container_name: hw20-jaeger
+    ports:
+      - "18203:16686"
+    mem_limit: 128m
