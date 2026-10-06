@@ -1,0 +1,17 @@
+title = "Session 17 homework secret scan"
+
+[extend]
+useDefault = true
+
+[[allowlists]]
+description = "The README quotes the fake key that was planted to test the gate"
+targetRules = ["generic-api-key"]
+condition = "AND"
+paths = ['''README\.md$''']
+regexes = ['''9Kd2Lq8Wz4Xn7Rt5Vb3Hm6Pj1''']
+
+[[allowlists]]
+description = "Python base images set GPG_KEY to the public fingerprint of the CPython release signing key"
+targetRules = ["generic-api-key"]
+regexTarget = "line"
+regexes = ['''GPG_KEY=[0-9A-F]{40}\b''']

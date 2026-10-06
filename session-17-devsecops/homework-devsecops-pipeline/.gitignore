@@ -1,0 +1,7 @@
+__pycache__/
+.pytest_cache/
+.coverage
+bandit.json
+pip-audit.json
+gitleaks.json
+trivy.json

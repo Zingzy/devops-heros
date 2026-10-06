@@ -1,0 +1,333 @@
+name: Session 17 DevSecOps pipeline
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - session-17-devsecops/homework-devsecops-pipeline/**
+      - .github/workflows/session17-devsecops.yml
+  pull_request:
+    paths:
+      - session-17-devsecops/homework-devsecops-pipeline/**
+      - .github/workflows/session17-devsecops.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: session17-devsecops-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  PYTHON_VERSION: "3.12"
+  IMAGE: ghcr.io/zingzy/session17-devsecops
+  BANDIT_VERSION: 1.9.4
+  PIP_AUDIT_VERSION: 2.10.1
+  GITLEAKS_VERSION: 8.30.1
+  TRIVY_VERSION: 0.75.0
+
+defaults:
+  run:
+    working-directory: session-17-devsecops/homework-devsecops-pipeline
+
+jobs:
+  build:
+    name: 1. Code and build
+    runs-on: ubuntu-latest
+    steps:
+      - name: Code, check out the commit
+        uses: actions/checkout@v7
+
+      - uses: actions/setup-python@v7
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Install dependencies
+        run: pip install -r requirements-dev.txt
+
+      - name: Build, compile the app and check the dependency tree
+        run: |
+          python -m compileall -q app
+          pip check
+          python -c "from app.app import app; print('routes:', sorted(r.rule for r in app.url_map.iter_rules()))"
+
+  unit-test:
+    name: 2. Unit test
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-python@v7
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Install dependencies
+        run: pip install -r requirements-dev.txt
+
+      - name: Run pytest with coverage
+        run: pytest --cov=app --cov-report=term-missing
+
+  sast:
+    name: 3. SAST (Bandit)
+    needs: unit-test
+    runs-on: ubuntu-latest
+    outputs:
+      high: ${{ steps.bandit.outputs.high }}
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-python@v7
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Install Bandit
+        run: pip install "bandit==${BANDIT_VERSION}"
+
+      - name: Scan the source code
+        id: bandit
+        run: |
+          bandit -r app -f json -o bandit.json --exit-zero
+          jq -r '.results[] | "\(.issue_severity)\t\(.test_id)\t\(.filename):\(.line_number)\t\(.issue_text)"' bandit.json
+          jq -r '.metrics._totals | "totals: high=\(."SEVERITY.HIGH") medium=\(."SEVERITY.MEDIUM") low=\(."SEVERITY.LOW") skipped_by_nosec=\(.skipped_tests)"' bandit.json
+          high=$(jq '[.results[] | select(.issue_severity == "HIGH")] | length' bandit.json)
+          echo "high=$high" >> "$GITHUB_OUTPUT"
+          echo "Bandit HIGH severity findings: $high" >> "$GITHUB_STEP_SUMMARY"
+
+  sca:
+    name: 4. SCA (pip-audit)
+    needs: sast
+    runs-on: ubuntu-latest
+    outputs:
+      vulns: ${{ steps.audit.outputs.vulns }}
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-python@v7
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Install pip-audit
+        run: pip install "pip-audit==${PIP_AUDIT_VERSION}"
+
+      - name: Audit runtime and dev dependencies
+        id: audit
+        run: |
+          pip-audit -r requirements-dev.txt -f json -o pip-audit.json --progress-spinner off || true
+          jq -r '.dependencies[] | select(.vulns | length > 0) | .name as $n | .version as $v | .vulns[] | "\($n) \($v)\t\(.id)\tfix: \(.fix_versions | join(","))"' pip-audit.json | sort -u
+          vulns=$(jq '[.dependencies[] | .name as $n | .vulns[] | "\($n) \(.id)"] | unique | length' pip-audit.json)
+          echo "audited $(jq '.dependencies | length' pip-audit.json) packages, $vulns known vulnerabilities"
+          echo "vulns=$vulns" >> "$GITHUB_OUTPUT"
+          echo "pip-audit known vulnerabilities: $vulns" >> "$GITHUB_STEP_SUMMARY"
+
+  secret-scan:
+    name: 5. Secret scan (gitleaks)
+    needs: sca
+    runs-on: ubuntu-latest
+    outputs:
+      leaks: ${{ steps.gitleaks.outputs.leaks }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      - name: Install gitleaks
+        working-directory: ${{ runner.temp }}
+        run: |
+          base="https://github.com/gitleaks/gitleaks/releases/download/v${GITLEAKS_VERSION}"
+          tarball="gitleaks_${GITLEAKS_VERSION}_linux_x64.tar.gz"
+          curl -fsSLO "$base/$tarball"
+          curl -fsSLO "$base/gitleaks_${GITLEAKS_VERSION}_checksums.txt"
+          grep " $tarball\$" "gitleaks_${GITLEAKS_VERSION}_checksums.txt" | sha256sum -c -
+          tar -xzf "$tarball" gitleaks
+          sudo install gitleaks /usr/local/bin/gitleaks
+
+      - name: Scan every commit that touched this folder
+        id: gitleaks
+        run: |
+          gitleaks git . --log-opts="-- ." \
+            --config .gitleaks.toml --gitleaks-ignore-path .gitleaksignore \
+            --redact --no-banner --verbose --exit-code 0 \
+            --report-format json --report-path gitleaks.json
+          leaks=$(jq length gitleaks.json)
+          echo "leaks=$leaks" >> "$GITHUB_OUTPUT"
+          echo "gitleaks findings: $leaks" >> "$GITHUB_STEP_SUMMARY"
+
+  docker-build:
+    name: 6. Docker build
+    needs: secret-scan
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Build the image
+        run: |
+          docker build \
+            --label "org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}" \
+            --label "org.opencontainers.image.revision=${{ github.sha }}" \
+            -t "$IMAGE:${{ github.sha }}" .
+          docker image ls "$IMAGE"
+          docker save "$IMAGE:${{ github.sha }}" -o "$RUNNER_TEMP/image.tar"
+
+      - name: Hand the exact image to the next jobs
+        uses: actions/upload-artifact@v4
+        with:
+          name: image
+          path: ${{ runner.temp }}/image.tar
+          retention-days: 1
+
+  image-scan:
+    name: 7. Container image scan (Trivy)
+    needs: docker-build
+    runs-on: ubuntu-latest
+    outputs:
+      vulns: ${{ steps.trivy.outputs.vulns }}
+      secrets: ${{ steps.trivy.outputs.secrets }}
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: image
+          path: ${{ runner.temp }}
+
+      - name: Install Trivy
+        working-directory: ${{ runner.temp }}
+        run: |
+          base="https://github.com/aquasecurity/trivy/releases/download/v${TRIVY_VERSION}"
+          tarball="trivy_${TRIVY_VERSION}_Linux-64bit.tar.gz"
+          curl -fsSLO "$base/$tarball"
+          curl -fsSLO "$base/trivy_${TRIVY_VERSION}_checksums.txt"
+          grep " $tarball\$" "trivy_${TRIVY_VERSION}_checksums.txt" | sha256sum -c -
+          tar -xzf "$tarball" trivy
+          sudo install trivy /usr/local/bin/trivy
+
+      - name: Scan the image for HIGH and CRITICAL vulnerabilities and secrets
+        id: trivy
+        run: |
+          trivy image --input "$RUNNER_TEMP/image.tar" \
+            --scanners vuln,secret --severity HIGH,CRITICAL \
+            --format json --output trivy.json --no-progress --exit-code 0
+          trivy convert --format table --scanners vuln,secret trivy.json
+          vulns=$(jq '[.Results[]?.Vulnerabilities[]?] | length' trivy.json)
+          secrets=$(jq '[.Results[]?.Secrets[]?] | length' trivy.json)
+          echo "vulns=$vulns" >> "$GITHUB_OUTPUT"
+          echo "secrets=$secrets" >> "$GITHUB_OUTPUT"
+          echo "Trivy HIGH/CRITICAL vulnerabilities: $vulns, secrets: $secrets" >> "$GITHUB_STEP_SUMMARY"
+
+  security-gate:
+    name: 8. Security gate
+    if: ${{ !cancelled() }}
+    needs: [sast, sca, secret-scan, image-scan]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Block on any HIGH/CRITICAL finding or any secret
+        working-directory: ${{ github.workspace }}
+        env:
+          SAST: ${{ needs.sast.result }} ${{ needs.sast.outputs.high }}
+          SCA: ${{ needs.sca.result }} ${{ needs.sca.outputs.vulns }}
+          SECRETS: ${{ needs.secret-scan.result }} ${{ needs.secret-scan.outputs.leaks }}
+          IMAGE_VULNS: ${{ needs.image-scan.result }} ${{ needs.image-scan.outputs.vulns }}
+          IMAGE_SECRETS: ${{ needs.image-scan.result }} ${{ needs.image-scan.outputs.secrets }}
+        run: |
+          failed=0
+          check() {
+            read -r result count <<< "$2"
+            if [ "$result" != "success" ] || ! [[ "$count" =~ ^[0-9]+$ ]]; then
+              verdict="BLOCK (job $result)"; failed=1
+            elif [ "$count" -gt 0 ]; then
+              verdict="BLOCK"; failed=1
+            else
+              verdict="pass"
+            fi
+            printf '| %s | %s | %s |\n' "$1" "${count:-none}" "$verdict" | tee -a "$GITHUB_STEP_SUMMARY"
+          }
+          printf '| Check | Findings | Verdict |\n|---|---|---|\n' | tee -a "$GITHUB_STEP_SUMMARY"
+          check "SAST, Bandit HIGH severity" "$SAST"
+          check "SCA, pip-audit known vulnerabilities" "$SCA"
+          check "Secrets, gitleaks in git history" "$SECRETS"
+          check "Image, Trivy HIGH/CRITICAL vulnerabilities" "$IMAGE_VULNS"
+          check "Image, Trivy secrets" "$IMAGE_SECRETS"
+          if [ "$failed" -ne 0 ]; then
+            echo "::error::Security gate failed. The image will not be pushed or deployed."
+            exit 1
+          fi
+          echo "Security gate passed."
+
+  push:
+    name: 9. Push image to GHCR
+    needs: security-gate
+    if: github.event_name != 'pull_request'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    outputs:
+      image: ${{ steps.push.outputs.image }}
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: image
+          path: ${{ runner.temp }}
+
+      - name: Log in to GHCR
+        working-directory: ${{ runner.temp }}
+        run: echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u "${{ github.actor }}" --password-stdin
+
+      - name: Push the image that was scanned
+        id: push
+        working-directory: ${{ runner.temp }}
+        run: |
+          docker load -i image.tar
+          docker tag "$IMAGE:${{ github.sha }}" "$IMAGE:latest"
+          docker push "$IMAGE:${{ github.sha }}"
+          docker push "$IMAGE:latest"
+          image=$(docker inspect --format '{{index .RepoDigests 0}}' "$IMAGE:${{ github.sha }}")
+          echo "pushed $image"
+          echo "image=$image" >> "$GITHUB_OUTPUT"
+
+  deploy:
+    name: 10. Deploy to Kubernetes
+    needs: push
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: read
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Create a kind cluster in the runner
+        uses: helm/kind-action@v1.15.1
+        with:
+          cluster_name: session17
+
+      - name: Let the cluster pull from GHCR
+        run: |
+          kubectl create secret docker-registry ghcr-pull \
+            --docker-server=ghcr.io \
+            --docker-username="${{ github.actor }}" \
+            --docker-password="${{ secrets.GITHUB_TOKEN }}"
+
+      - name: Apply the manifests with the pushed image digest
+        env:
+          IMAGE_REF: ${{ needs.push.outputs.image }}
+        run: |
+          test -n "$IMAGE_REF"
+          sed "s|__IMAGE__|$IMAGE_REF|" k8s/deployment.yaml | kubectl apply -f -
+          kubectl apply -f k8s/service.yaml
+
+      - name: Wait for the rollout
+        run: |
+          kubectl rollout status deployment/session17-devsecops --timeout=180s
+          kubectl get deploy,pods,svc -o wide
+
+      - name: Smoke test through the Service
+        run: |
+          kubectl port-forward service/session17-devsecops 8080:80 > "$RUNNER_TEMP/port-forward.log" 2>&1 &
+          for i in $(seq 1 30); do curl -fsS localhost:8080/health > /dev/null && break; sleep 1; done
+          curl -fsS localhost:8080/health | jq -e '.status == "healthy"'
+          curl -fsS localhost:8080/api/status | jq .
+          curl -fsS localhost:8080/ | grep -o '<title>.*</title>'
+          kubectl get pods -l app=session17-devsecops \
+            -o jsonpath='{range .items[*]}{.metadata.name}{"  "}{.status.containerStatuses[0].imageID}{"\n"}{end}'
