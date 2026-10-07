@@ -15,6 +15,14 @@
 - [Kubernetes pods, ReplicaSets and Deployments](session10-k8s-core-objects/homework-pods-replicasets-deployments/README.md)
 - [Kubernetes networking and Services](session-11-kubernetes-services/homework-networking-services/README.md)
 - [Kubernetes Ingress, ConfigMaps and Secrets](session-12-ingress-configmaps-secrets/homework-ingress-configmaps-secrets/README.md)
+- [Kubernetes storage, HPA and probes](session-13-storage-hpa-probes/homework-storage-hpa-probes/README.md)
+- [Kubernetes troubleshooting](session-14-kubernetes-troubleshooting/homework-kubernetes-troubleshooting/README.md)
+- [Helm](session-15-helm/homework-helm/README.md)
+- [CI/CD and GitHub Actions](session-16-github-actions/homework-cicd-demo/README.md)
+- [CI/CD and DevSecOps](session-17-devsecops/homework-devsecops-pipeline/README.md)
+- [Terraform and AWS services](session18-terraform-iac/homework-terraform-aws/README.md)
+- [Cloud and Terraform in action](session19-cloud-terraform/homework-cloud-terraform/README.md)
+- [Monitoring, observability and GitOps](session20-monitoring-observability-gitops/homework-monitoring-gitops/README.md)
 
 ## Submission link
 - Section A: https://forms.gle/ydjAJcwxjpjBXgxB8
