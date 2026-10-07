@@ -57,7 +57,7 @@ resource "aws_route_table_association" "public" {
 
 resource "aws_security_group" "web" {
   name        = "${var.project}-web-sg"
-  description = "HTTP from anywhere, SSH from one address"
+  description = "HTTP from anywhere, no SSH"
   vpc_id      = aws_vpc.main.id
 
   ingress {
@@ -66,14 +66,6 @@ resource "aws_security_group" "web" {
     to_port     = 80
     protocol    = "tcp"
     cidr_blocks = ["0.0.0.0/0"]
-  }
-
-  ingress {
-    description = "SSH"
-    from_port   = 22
-    to_port     = 22
-    protocol    = "tcp"
-    cidr_blocks = [var.ssh_cidr]
   }
 
   egress {
@@ -95,10 +87,14 @@ resource "aws_instance" "web" {
   subnet_id              = aws_subnet.public.id
   vpc_security_group_ids = [aws_security_group.web.id]
 
+  metadata_options {
+    http_tokens = "required"
+  }
+
   user_data = <<-EOT
     #!/bin/bash
     dnf install -y nginx
-    echo "hello from ${var.project}" > /usr/share/nginx/html/index.html
+    echo "<h1>${var.project} web server on $(hostname)</h1>" > /usr/share/nginx/html/index.html
     systemctl enable --now nginx
   EOT
 
@@ -111,8 +107,12 @@ resource "aws_instance" "web" {
   }
 }
 
+resource "random_id" "bucket_suffix" {
+  byte_length = 3
+}
+
 resource "aws_s3_bucket" "artifacts" {
-  bucket        = "${var.project}-artifacts-24bcs10177"
+  bucket        = "${var.project}-24bcs10177-${random_id.bucket_suffix.hex}"
   force_destroy = true
 
   tags = {

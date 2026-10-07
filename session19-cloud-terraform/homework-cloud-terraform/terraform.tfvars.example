@@ -1,4 +1,2 @@
-aws_region    = "ap-south-1"
-project       = "hw19"
+project       = "devops-hw19"
 instance_type = "t3.micro"
-ssh_cidr      = "203.0.113.10/32"

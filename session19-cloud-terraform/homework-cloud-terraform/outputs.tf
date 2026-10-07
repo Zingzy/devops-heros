@@ -33,9 +33,9 @@ output "bucket_name" {
   value       = aws_s3_bucket.artifacts.bucket
 }
 
-output "bucket_object_url" {
-  description = "Path style URL of the uploaded page on LocalStack."
-  value       = "${var.aws_endpoint}/${aws_s3_bucket.artifacts.bucket}/${aws_s3_object.index.key}"
+output "web_url" {
+  description = "Where nginx answers once the instance has booted."
+  value       = "http://${aws_instance.web.public_ip}"
 }
 
 output "ami_name" {

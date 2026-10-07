@@ -35,6 +35,7 @@
   <path class="e" d="M415,104 C415,127.0 415,127.0 415,148" marker-end="url(#a)"/>
   <path class="e" d="M415,104 C415,127.0 685,127.0 685,148" marker-end="url(#a)"/>
   <path class="e" d="M955,104 C955,127.0 955,127.0 955,148" marker-end="url(#a)"/>
+  <path class="e" d="M955,184 C955,207.0 955,207.0 955,228" marker-end="url(#a)"/>
   <path class="e" d="M415,184 C415,207.0 415,207.0 415,228" marker-end="url(#a)"/>
   <path class="e" d="M415,264 C415,287.0 145,287.0 145,308" marker-end="url(#a)"/>
   <path class="e" d="M145,184 C145,247.0 145,247.0 145,308" marker-end="url(#a)"/>
@@ -42,11 +43,11 @@
   <path class="e" d="M685,184 C685,287.0 685,287.0 685,388" marker-end="url(#a)"/>
   <path class="e" d="M955,344 C955,367.0 685,367.0 685,388" marker-end="url(#a)"/>
   <path class="e" d="M685,424 C685,447.0 955,447.0 955,468" marker-end="url(#a)"/>
-  <path class="e" d="M1085,87 H1098 V487 H1087" marker-end="url(#a)"/>
+  <path class="e" d="M1085,167 H1098 V487 H1087" marker-end="url(#a)"/>
   <rect class="n" x="285" y="70" width="260" height="34" rx="6"/>
   <text class="t" x="415" y="92" text-anchor="middle" font-family="SFMono-Regular, Menlo, Consolas, monospace" font-size="11.5">aws_vpc.main</text>
   <rect class="n" x="825" y="70" width="260" height="34" rx="6"/>
-  <text class="t" x="955" y="92" text-anchor="middle" font-family="SFMono-Regular, Menlo, Consolas, monospace" font-size="11.5">aws_s3_bucket.artifacts</text>
+  <text class="t" x="955" y="92" text-anchor="middle" font-family="SFMono-Regular, Menlo, Consolas, monospace" font-size="11.5">random_id.bucket_suffix</text>
   <rect class="n" x="15" y="150" width="260" height="34" rx="6"/>
   <text class="t" x="145" y="172" text-anchor="middle" font-family="SFMono-Regular, Menlo, Consolas, monospace" font-size="11.5">aws_subnet.public</text>
   <rect class="n" x="285" y="150" width="260" height="34" rx="6"/>
@@ -54,9 +55,11 @@
   <rect class="n" x="555" y="150" width="260" height="34" rx="6"/>
   <text class="t" x="685" y="172" text-anchor="middle" font-family="SFMono-Regular, Menlo, Consolas, monospace" font-size="11.5">aws_security_group.web</text>
   <rect class="n" x="825" y="150" width="260" height="34" rx="6"/>
-  <text class="t" x="955" y="172" text-anchor="middle" font-family="SFMono-Regular, Menlo, Consolas, monospace" font-size="11.5">aws_s3_bucket_versioning.artifacts</text>
+  <text class="t" x="955" y="172" text-anchor="middle" font-family="SFMono-Regular, Menlo, Consolas, monospace" font-size="11.5">aws_s3_bucket.artifacts</text>
   <rect class="n" x="285" y="230" width="260" height="34" rx="6"/>
   <text class="t" x="415" y="252" text-anchor="middle" font-family="SFMono-Regular, Menlo, Consolas, monospace" font-size="11.5">aws_route_table.public</text>
+  <rect class="n" x="825" y="230" width="260" height="34" rx="6"/>
+  <text class="t" x="955" y="252" text-anchor="middle" font-family="SFMono-Regular, Menlo, Consolas, monospace" font-size="11.5">aws_s3_bucket_versioning.artifacts</text>
   <rect class="n" x="15" y="310" width="260" height="34" rx="6"/>
   <text class="t" x="145" y="332" text-anchor="middle" font-family="SFMono-Regular, Menlo, Consolas, monospace" font-size="11.5">aws_route_table_association.public</text>
   <rect class="data" x="825" y="310" width="260" height="34" rx="6"/>

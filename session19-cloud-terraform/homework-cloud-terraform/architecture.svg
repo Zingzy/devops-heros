@@ -48,23 +48,19 @@
   <rect class="bg" x="0" y="0" width="960" height="680"/>
 
   <text class="t" x="20" y="30" font-size="16" font-weight="600">Session 19: what Terraform builds</text>
-  <text class="m" x="20" y="50">Every AWS API call goes to moto on this laptop, not to a real AWS account.</text>
+  <text class="m" x="20" y="50">Applied to a real AWS account in ap-south-1, then destroyed. Every resource is named devops-hw19-*.</text>
 
-  <rect class="tool" x="20" y="66" width="170" height="44" rx="6"/>
-  <text class="t" x="105" y="85" text-anchor="middle">terraform 1.16.4</text>
-  <text class="m" x="105" y="101" text-anchor="middle">plan, apply, destroy</text>
-  <rect class="tool" x="230" y="66" width="190" height="44" rx="6"/>
-  <text class="t" x="325" y="85" text-anchor="middle">hashicorp/aws 6.67.0</text>
-  <text class="m" x="325" y="101" text-anchor="middle">endpoints + dummy keys</text>
-  <rect class="tool" x="460" y="66" width="190" height="44" rx="6"/>
-  <text class="t" x="555" y="85" text-anchor="middle">http://localhost:18190</text>
-  <text class="m" x="555" y="101" text-anchor="middle">ec2, s3, sts endpoints</text>
-  <rect class="tool" x="690" y="66" width="250" height="44" rx="6"/>
-  <text class="t" x="815" y="85" text-anchor="middle">container hw19-moto</text>
-  <text class="m" x="815" y="101" text-anchor="middle">motoserver/moto, port 5000 inside</text>
-  <path class="line" d="M190,88 H228" marker-end="url(#a)"/>
-  <path class="line" d="M420,88 H458" marker-end="url(#a)"/>
-  <path class="line" d="M650,88 H688" marker-end="url(#a)"/>
+  <rect class="tool" x="20" y="66" width="200" height="44" rx="6"/>
+  <text class="t" x="120" y="85" text-anchor="middle">terraform 1.16.4</text>
+  <text class="m" x="120" y="101" text-anchor="middle">plan, apply, destroy</text>
+  <rect class="tool" x="270" y="66" width="250" height="44" rx="6"/>
+  <text class="t" x="395" y="85" text-anchor="middle">hashicorp/aws 6.67.0</text>
+  <text class="m" x="395" y="101" text-anchor="middle">+ hashicorp/random 3.9.1</text>
+  <rect class="tool" x="570" y="66" width="370" height="44" rx="6"/>
+  <text class="t" x="755" y="85" text-anchor="middle">AWS APIs in ap-south-1 (EC2, S3)</text>
+  <text class="m" x="755" y="101" text-anchor="middle">default_tags: Project, Session=19, Owner</text>
+  <path class="line" d="M220,88 H268" marker-end="url(#a)"/>
+  <path class="line" d="M520,88 H568" marker-end="url(#a)"/>
 
   <ellipse class="net" cx="340" cy="152" rx="70" ry="20"/>
   <text class="t" x="340" y="157" text-anchor="middle">Internet</text>
@@ -73,40 +69,41 @@
   <text class="t" x="36" y="212" font-weight="600">Region ap-south-1</text>
 
   <rect class="vpc" x="44" y="240" width="596" height="370" rx="8"/>
-  <text class="t" x="60" y="292" font-weight="600">VPC hw19-vpc</text>
-  <text class="m" x="60" y="310">10.19.0.0/16, DNS on</text>
+  <text class="t" x="60" y="268" font-weight="600">VPC devops-hw19-vpc</text>
+  <text class="m" x="60" y="285">10.19.0.0/16, DNS on</text>
 
   <rect class="box" x="280" y="222" width="120" height="38" rx="6"/>
   <text class="t" x="340" y="238" text-anchor="middle">Internet gateway</text>
-  <text class="m" x="340" y="253" text-anchor="middle">hw19-igw</text>
+  <text class="m" x="340" y="253" text-anchor="middle">devops-hw19-igw</text>
   <path class="line" d="M340,174 V220" marker-start="url(#a)" marker-end="url(#a)"/>
 
-  <rect class="box" x="60" y="340" width="190" height="80" rx="6"/>
-  <text class="t" x="155" y="360" text-anchor="middle">Route table hw19-public-rt</text>
-  <text class="m" x="155" y="378" text-anchor="middle">0.0.0.0/0 to hw19-igw</text>
-  <text class="m" x="155" y="394" text-anchor="middle">10.19.0.0/16 local</text>
-  <text class="m" x="155" y="410" text-anchor="middle">associated with the subnet</text>
-  <path class="line" d="M300,260 V282 H155 V338" marker-end="url(#a)"/>
-  <text class="m" x="200" y="276">route target</text>
+  <rect class="box" x="60" y="340" width="190" height="96" rx="6"/>
+  <text class="t" x="155" y="358" text-anchor="middle">Route table</text>
+  <text class="m" x="155" y="374" text-anchor="middle">devops-hw19-public-rt</text>
+  <text class="m" x="155" y="390" text-anchor="middle">0.0.0.0/0 to the IGW</text>
+  <text class="m" x="155" y="406" text-anchor="middle">10.19.0.0/16 local</text>
+  <text class="m" x="155" y="422" text-anchor="middle">associated with the subnet</text>
+  <path class="line" d="M300,260 V282 H230 V338" marker-end="url(#a)"/>
+  <text class="m" x="224" y="318" text-anchor="end">route target</text>
 
   <rect class="az" x="276" y="300" width="350" height="296" rx="6"/>
   <text class="m" x="288" y="318">Availability zone ap-south-1a</text>
 
   <rect class="subnet" x="294" y="328" width="314" height="254" rx="6"/>
-  <text class="t" x="308" y="348" font-weight="600">Public subnet hw19-public-subnet</text>
+  <text class="t" x="308" y="348" font-weight="600">Public subnet devops-hw19-public-subnet</text>
   <text class="m" x="308" y="365">10.19.1.0/24, map_public_ip_on_launch = true</text>
   <path class="line" d="M250,372 H292" marker-end="url(#a)"/>
 
   <rect class="sg" x="318" y="380" width="266" height="188" rx="6"/>
-  <text class="sgtext" x="332" y="400" font-weight="600">Security group hw19-web-sg</text>
+  <text class="sgtext" x="332" y="400" font-weight="600">Security group devops-hw19-web-sg</text>
   <text class="m" x="332" y="418">in: tcp 80 from 0.0.0.0/0</text>
-  <text class="m" x="332" y="434">in: tcp 22 from 203.0.113.10/32 only</text>
+  <text class="m" x="332" y="434">no port 22, no SSH at all</text>
   <text class="m" x="332" y="450">out: all</text>
 
   <rect class="box" x="346" y="464" width="210" height="90" rx="6"/>
-  <text class="t" x="451" y="486" text-anchor="middle" font-weight="600">EC2 hw19-web</text>
-  <text class="m" x="451" y="504" text-anchor="middle">t3.micro, Amazon Linux 2023 AMI</text>
-  <text class="m" x="451" y="520" text-anchor="middle">private 10.19.1.4 + public IP</text>
+  <text class="t" x="451" y="486" text-anchor="middle" font-weight="600">EC2 devops-hw19-web</text>
+  <text class="m" x="451" y="504" text-anchor="middle">t3.micro, AL2023, IMDSv2</text>
+  <text class="m" x="451" y="520" text-anchor="middle">private 10.19.1.114 + public IP</text>
   <text class="m" x="451" y="536" text-anchor="middle">user_data installs nginx</text>
 
   <rect class="s3" x="664" y="240" width="256" height="370" rx="8"/>
@@ -115,8 +112,8 @@
 
   <rect class="box" x="684" y="300" width="216" height="74" rx="6"/>
   <text class="t" x="792" y="322" text-anchor="middle">Bucket</text>
-  <text class="m" x="792" y="340" text-anchor="middle">hw19-artifacts-24bcs10177</text>
-  <text class="m" x="792" y="358" text-anchor="middle">versioning Enabled, private</text>
+  <text class="m" x="792" y="340" text-anchor="middle">devops-hw19-24bcs10177-254738</text>
+  <text class="m" x="792" y="358" text-anchor="middle">versioning on, public access blocked</text>
 
   <rect class="box" x="710" y="480" width="164" height="50" rx="6"/>
   <text class="t" x="792" y="501" text-anchor="middle">Object index.html</text>
@@ -131,5 +128,5 @@
   <text class="m" x="62" y="656">network path or ownership</text>
   <path class="dep" d="M260,652 H290" marker-end="url(#d)"/>
   <text class="m" x="298" y="656">Terraform dependency only, no traffic</text>
-  <text class="m" x="590" y="656">moto records the instance as running, no VM boots</text>
+  <text class="m" x="590" y="656">curl to the public IP returned the nginx page</text>
 </svg>
